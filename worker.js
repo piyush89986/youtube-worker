@@ -97,21 +97,33 @@ const startWorker = async () => {
     } else {
       console.log('[WORKER] Standalone worker standby: monitoring persistent database jobs queue...');
 
+      // Polling interval for persistent database jobs & scheduled uploads (runs every 15s)
       let checkCount = 0;
-      // Polling interval for persistent database jobs (runs every 15s)
       setInterval(async () => {
         try {
           checkCount++;
           if (mongoose.connection.readyState === 1) {
-            const count = await mongoose.connection.db
-              .collection('processingjobs')
-              .countDocuments({ status: 'queued' });
+            const db = mongoose.connection.db;
 
-            if (count > 0) {
-              console.log(`[WORKER:Queue] 🔔 Detected ${count} queued job(s) awaiting processing.`);
-            } else if (checkCount % 2 === 0) {
-              // Log heartbeat every 30 seconds so logs are visibly active on Render
-              console.log(`[WORKER:Heartbeat] Worker active & healthy | MongoDB connected | 0 queued jobs (${new Date().toLocaleTimeString()})`);
+            // 1. Check queued video processing jobs
+            const queuedJobsCount = await db.collection('processingjobs').countDocuments({ status: 'queued' });
+            if (queuedJobsCount > 0) {
+              console.log(`[WORKER:Queue] 🔔 Detected ${queuedJobsCount} queued video processing job(s).`);
+            }
+
+            // 2. Check pending scheduled YouTube uploads
+            const now = new Date();
+            const dueSchedulesCount = await db.collection('publishingschedules').countDocuments({
+              status: 'pending',
+              scheduledTime: { $lte: now },
+            });
+            if (dueSchedulesCount > 0) {
+              console.log(`[WORKER:Scheduler] ⏰ Detected ${dueSchedulesCount} pending YouTube Shorts ready for publication.`);
+            }
+
+            // Heartbeat
+            if (checkCount % 2 === 0) {
+              console.log(`[WORKER:Heartbeat] Worker active & healthy | MongoDB connected | Day-by-Day Auto-Scheduler standby (${new Date().toLocaleTimeString()})`);
             }
           }
         } catch (err) {
