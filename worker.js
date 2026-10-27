@@ -40,6 +40,7 @@ app.use((req, res, next) => {
 // Primary Health Check for Render
 app.get('/', (req, res) => {
   const dbStatus = mongoose.connection.readyState === 1 ? 'connected' : 'disconnected';
+  console.log(`[HTTP Server] Health check ping received (${new Date().toLocaleTimeString()})`);
   res.status(200).json({
     status: 'healthy',
     service: 'youtube-worker',
@@ -96,20 +97,25 @@ const startWorker = async () => {
     } else {
       console.log('[WORKER] Standalone worker standby: monitoring persistent database jobs queue...');
 
+      let checkCount = 0;
       // Polling interval for persistent database jobs (runs every 15s)
       setInterval(async () => {
         try {
+          checkCount++;
           if (mongoose.connection.readyState === 1) {
             const count = await mongoose.connection.db
               .collection('processingjobs')
               .countDocuments({ status: 'queued' });
 
             if (count > 0) {
-              console.log(`[WORKER:Monitor] Detected ${count} queued job(s) awaiting processing.`);
+              console.log(`[WORKER:Queue] 🔔 Detected ${count} queued job(s) awaiting processing.`);
+            } else if (checkCount % 2 === 0) {
+              // Log heartbeat every 30 seconds so logs are visibly active on Render
+              console.log(`[WORKER:Heartbeat] Worker active & healthy | MongoDB connected | 0 queued jobs (${new Date().toLocaleTimeString()})`);
             }
           }
         } catch (err) {
-          // Silent monitor catch so interval keeps running
+          console.error('[WORKER:Monitor] Queue check error:', err.message);
         }
       }, 15000);
     }
