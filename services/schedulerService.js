@@ -1,4 +1,9 @@
-const cron = require('node-cron');
+let cron = null;
+try {
+  cron = require('node-cron');
+} catch (e) {
+  // Graceful fallback to setInterval
+}
 const PublishingSchedule = require('../models/PublishingSchedule');
 const ShortClip = require('../models/ShortClip');
 const YouTubeAccount = require('../models/YouTubeAccount');
@@ -199,9 +204,15 @@ const checkAndPublishScheduledClips = async () => {
  * Start the persistent background scheduler (checks every minute)
  */
 const startScheduler = () => {
-  cron.schedule('* * * * *', () => {
-    checkAndPublishScheduledClips();
-  });
+  if (cron && typeof cron.schedule === 'function') {
+    cron.schedule('* * * * *', () => {
+      checkAndPublishScheduledClips();
+    });
+  } else {
+    setInterval(() => {
+      checkAndPublishScheduledClips();
+    }, 60000);
+  }
   logger.info('Persistent publication scheduler started (checking every minute)');
 };
 

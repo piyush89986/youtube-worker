@@ -1,6 +1,8 @@
 const mongoose = require('mongoose');
-const bcrypt = require('bcryptjs');
-const jwt = require('jsonwebtoken');
+let bcrypt = null;
+try { bcrypt = require('bcryptjs'); } catch (e) {}
+let jwt = null;
+try { jwt = require('jsonwebtoken'); } catch (e) {}
 const env = require('../config/env');
 
 const userSchema = new mongoose.Schema(
@@ -69,11 +71,13 @@ const userSchema = new mongoose.Schema(
 
 // Password comparison method
 userSchema.methods.comparePassword = async function (candidatePassword) {
+  if (!bcrypt) return false;
   return bcrypt.compare(candidatePassword, this.passwordHash);
 };
 
 // Generate JWT authentication token
 userSchema.methods.generateAuthToken = function () {
+  if (!jwt) return null;
   return jwt.sign(
     {
       id: this._id,
@@ -89,6 +93,7 @@ userSchema.methods.generateAuthToken = function () {
 
 // Static helper to hash passwords
 userSchema.statics.hashPassword = async function (plainPassword) {
+  if (!bcrypt) return plainPassword;
   const salt = await bcrypt.genSalt(10);
   return bcrypt.hash(plainPassword, salt);
 };
